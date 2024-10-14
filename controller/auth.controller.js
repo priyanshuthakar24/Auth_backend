@@ -80,7 +80,7 @@ exports.login = async (req, res, next) => {
     try {
         const user = await User.findOne({ email })
         if (!user) {
-            return res.status(400).json({ success: false, message: 'Inavalid credentials' })
+            return res.status(400).json({ success: false, message: 'User Not Found' })
         }
         const isPasswordValid = await bcrypt.compare(password, user.password)
         if (!isPasswordValid) {
@@ -103,8 +103,11 @@ exports.login = async (req, res, next) => {
     }
 }
 exports.logout = async (req, res, next) => {
-    res.clearCookie('token');
-    res.status(200).json({ success: true, message: 'logout Successfully' })
+    res.clearCookie('token', {
+        httpOnly: true, 
+        sameSite: 'Strict',  // Make sure this matches how you set the cookie
+    });
+    res.status(200).json({ success: true, message: 'Logged out successfully' })
 }
 
 exports.forgotPassword = async (req, res, next) => {

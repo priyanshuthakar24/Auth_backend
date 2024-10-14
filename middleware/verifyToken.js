@@ -3,7 +3,6 @@ const jwt = require('jsonwebtoken');
 exports.verifyToken = async (req, res, next) => {
     console.log("method call")
     const token = await req.cookies.token;
-    console.log(token);
     if (!token) return res.status(401).json({ success: false, message: 'Unauthorized -no token provided' });
 
     try {
@@ -15,4 +14,4 @@ exports.verifyToken = async (req, res, next) => {
         console.log("Error in verifyToken", error);
         return res.status(500).json({ success: false, message: 'Server error' });
     }
-}
+}   
