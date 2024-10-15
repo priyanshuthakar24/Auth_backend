@@ -51,7 +51,6 @@ exports.verifyEmail = async (req, res, next) => {
             verificationToken: code,
             verificationTokenExpiresAt: { $gt: Date.now() }
         })
-        console.log(user);
         if (!user) {
             return res.status(400).json({ success: false, message: "Invalid or expired verification code" })
         }
@@ -104,7 +103,7 @@ exports.login = async (req, res, next) => {
 }
 exports.logout = async (req, res, next) => {
     res.clearCookie('token', {
-        httpOnly: true, 
+        httpOnly: true,
         sameSite: 'Strict',  // Make sure this matches how you set the cookie
     });
     res.status(200).json({ success: true, message: 'Logged out successfully' })
@@ -126,7 +125,7 @@ exports.forgotPassword = async (req, res, next) => {
 
         await user.save();
 
-        await sendPasswordResetEmail(user.email, `${process.env.CLIENT_URL}/reset-password/${resetToken}`);
+        await sendPasswordResetEmail(user.email, `${process.env.CLIENT_URL}/auth/reset-password/${resetToken}`);
         res.status(200).json({ success: true, message: "Password reset link sent to your email" });
     } catch (error) {
         res.status(400).json({ success: false, message: error.message });
@@ -137,22 +136,21 @@ exports.resetPassword = async (req, res, next) => {
     try {
         const { token } = req.params;
         const { password } = req.body;
-
         const user = await User.findOne({
             resetPasswordToken: token,
             resetPasswordExpiresAt: { $gt: Date.now() },
         });
         if (!user) {
-            res.status(400).json({ success: false, message: 'Invalid or Expired reset Token' });
+            return res.status(400).json({ success: false, message: 'Invalid or Expired reset Token' });
         }
         const hashedPassword = await bcrypt.hash(password, 10);
         user.password = hashedPassword;
         user.resetPasswordToken = undefined;
-        user.resetPasswordExpiresAt == undefined;
+        user.resetPasswordExpiresAt = undefined;
         await user.save();
-
         await sendResetSuccessEmail(user.email);
         res.status(200).json({ success: true, message: "Password reset Successfully" });
+
     } catch (error) {
         console.log('Error in resetPassword', error);
         res.status(400).json({ success: false, message: error.message });
