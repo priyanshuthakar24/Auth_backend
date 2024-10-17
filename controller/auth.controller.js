@@ -4,14 +4,20 @@ const crypto = require('crypto');
 const { generateVerificationToken } = require('../utils/generateVerificationToken');
 const { generateTokenAndSetCookie } = require('../utils/generateTokenAndSetCookie');
 const { sendVerificationEmail, sendWelcomeEmail, sendPasswordResetEmail, sendResetSuccessEmail } = require('../mail/email');
+const { validationResult } = require('express-validator');
 
-
+//! signup methood 
 exports.signup = async (req, res, next) => {
     const { email, name, password } = req.body;
+    console.log(email, name, password)
     try {
-        if (!email || !password || !name) {
-            throw new Error("All fields are required!");
+        const errors = validationResult(req);
+        if (!errors.isEmpty()) {
+            return res.status(400).json({ success: false, message: errors.array()[0].msg.toString() });
         }
+        // if (!email || !password || !name) {
+        //     throw new Error("All fields are required!");
+        // }
         const userAlreadyExists = await User.findOne({ email });
         if (userAlreadyExists) {
             return res.status(400).json({ success: false, message: 'User Already exists!' });
@@ -43,23 +49,28 @@ exports.signup = async (req, res, next) => {
     }
 }
 
-
+//! Email-Verification
 exports.verifyEmail = async (req, res, next) => {
     const { code } = req.body;
     try {
+        if (!code) throw new Error("Code is required")
+
         const user = await User.findOne({
             verificationToken: code,
             verificationTokenExpiresAt: { $gt: Date.now() }
         })
+
         if (!user) {
             return res.status(400).json({ success: false, message: "Invalid or expired verification code" })
         }
+
         user.isVerified = true;
         user.verificationToken = undefined;
         user.verificationTokenExpiresAt = undefined;
         await user.save();
 
         await sendWelcomeEmail(user.email, user.name);
+
         res.status(200).json({
             success: true,
             message: 'Email verified  successfully',
@@ -69,14 +80,21 @@ exports.verifyEmail = async (req, res, next) => {
             }
         })
     } catch (error) {
-        console.log("error in verifyEmail ", error);
-        res.status(500).json({ success: false, message: "Server error" });
+        // console.log("error in verifyEmail ", error);
+        console.log('method call');
+        res.status(500).json({ success: false, message: error.message });
     }
 }
 
+
 exports.login = async (req, res, next) => {
     const { email, password } = req.body;
+
     try {
+        const errors = validationResult(req);
+        if (!errors.isEmpty()) {
+            return res.status(400).json({ success: false, message: errors.array()[0].msg.toString() })
+        }
         const user = await User.findOne({ email })
         if (!user) {
             return res.status(400).json({ success: false, message: 'User Not Found' })
@@ -85,9 +103,11 @@ exports.login = async (req, res, next) => {
         if (!isPasswordValid) {
             return res.status(400).json({ success: false, message: 'Invalid Credentials' });
         }
+
         generateTokenAndSetCookie(res, user._id);
         user.lastLogin = new Date();
         await user.save();
+
         res.status(200).json({
             success: true,
             message: 'Logged in successfully',
@@ -96,11 +116,14 @@ exports.login = async (req, res, next) => {
                 password: undefined
             }
         })
+
     } catch (error) {
         console.log("Error in Login ", error);
         res.status(400).json({ success: false, message: error.message });
     }
 }
+
+//! Logout method 
 exports.logout = async (req, res, next) => {
     res.clearCookie('token', {
         httpOnly: true,
@@ -109,9 +132,15 @@ exports.logout = async (req, res, next) => {
     res.status(200).json({ success: true, message: 'Logged out successfully' })
 }
 
+//! forgot-password method 
 exports.forgotPassword = async (req, res, next) => {
     const { email } = req.body
     try {
+        const errors = validationResult(req);
+        console.log(errors.array())
+        if (!errors.isEmpty()) {
+            return res.status(400).json({ success: false, message: errors.array()[0].msg.toString() })
+        }
         const user = await User.findOne({ email });
 
         if (!user) {
@@ -132,39 +161,50 @@ exports.forgotPassword = async (req, res, next) => {
     }
 }
 
+//! Reset-Password method 
 exports.resetPassword = async (req, res, next) => {
     try {
         const { token } = req.params;
         const { password } = req.body;
+        const errors = validationResult(req);
+        if (!errors.isEmpty()) {
+            return res.status(400).json({ success: false, message: errors.array()[0].msg });
+        }
         const user = await User.findOne({
             resetPasswordToken: token,
             resetPasswordExpiresAt: { $gt: Date.now() },
         });
+
         if (!user) {
             return res.status(400).json({ success: false, message: 'Invalid or Expired reset Token' });
         }
+
         const hashedPassword = await bcrypt.hash(password, 10);
         user.password = hashedPassword;
         user.resetPasswordToken = undefined;
         user.resetPasswordExpiresAt = undefined;
+
         await user.save();
         await sendResetSuccessEmail(user.email);
+
         res.status(200).json({ success: true, message: "Password reset Successfully" });
 
     } catch (error) {
-        console.log('Error in resetPassword', error);
         res.status(400).json({ success: false, message: error.message });
     }
 }
+
+//! check for authentication if user is valid or not with jwt token  
 exports.checkAuth = async (req, res, next) => {
     try {
         const user = await User.findById(req.userId).select('-password');
+
         if (!user) {
             return res.status(400).json({ success: false, message: 'User Not Found' });
         }
+
         res.status(200).json({ success: true, user });
     } catch (error) {
-        console.log('Error in checkAuth', error);
         res.status(400).json({ success: false, message: error.message });
     }
 }
